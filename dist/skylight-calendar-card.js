@@ -200,6 +200,7 @@ class SkylightCalendarCard extends HTMLElement {
       startingDay: 'monday',
       views: ['Today', 'Tomorrow', 'Week', 'Biweek', 'Month'],
       title: 'Family Calendar',
+      showHeader: true,
       ...config,
     };
 
@@ -264,6 +265,7 @@ class SkylightCalendarCard extends HTMLElement {
     const card = document.createElement('ha-card');
     card.innerHTML = `
       <div class="skylight">
+        ${this._config.showHeader ? `
         <div class="header">
           <div class="date-section">
             <div class="day-name"></div>
@@ -272,6 +274,7 @@ class SkylightCalendarCard extends HTMLElement {
           </div>
           <div class="weather-section"></div>
         </div>
+        ` : ''}
         <div class="controls">
           <div class="title-row">
             <span class="calendar-title">${this._escapeHtml(this._config.title)}</span>
@@ -289,8 +292,10 @@ class SkylightCalendarCard extends HTMLElement {
     this._renderFilters();
     this._renderViewSelector();
     this._createInnerCard();
-    this._updateDate();
-    this._startClock();
+    if (this._config.showHeader) {
+      this._updateDate();
+      this._startClock();
+    }
   }
 
   _renderFilters() {
@@ -857,6 +862,7 @@ const EDITOR_BASIC_SCHEMA = [
       },
     ],
   },
+  { name: 'showHeader', selector: { boolean: {} } },
   { name: 'weather_entity', selector: { entity: { domain: 'weather' } } },
   { name: 'defaultCalendar', selector: { entity: { domain: 'calendar' } } },
   {
@@ -915,6 +921,7 @@ const EDITOR_WPC_SCHEMA = [
 const EDITOR_LABELS = {
   title: 'Title',
   locale: 'Language',
+  showHeader: 'Show Date/Time/Weather Header',
   weather_entity: 'Weather Entity',
   defaultCalendar: 'Default Calendar (event creation)',
   defaultView: 'Default View',
