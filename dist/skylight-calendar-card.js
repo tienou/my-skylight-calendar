@@ -276,9 +276,11 @@ class SkylightCalendarCard extends HTMLElement {
         </div>
         ` : ''}
         <div class="controls">
+          ${this._config.showTitle !== false ? `
           <div class="title-row">
             <span class="calendar-title">${this._escapeHtml(this._config.title)}</span>
           </div>
+          ` : ''}
           <div class="buttons-row">
             <div class="calendar-filters"></div>
             <div class="view-selector"></div>
@@ -863,6 +865,7 @@ const EDITOR_BASIC_SCHEMA = [
     ],
   },
   { name: 'showHeader', selector: { boolean: {} } },
+  { name: 'showTitle', selector: { boolean: {} } },
   { name: 'weather_entity', selector: { entity: { domain: 'weather' } } },
   { name: 'defaultCalendar', selector: { entity: { domain: 'calendar' } } },
   {
@@ -922,6 +925,7 @@ const EDITOR_LABELS = {
   title: 'Title',
   locale: 'Language',
   showHeader: 'Show Date/Time/Weather Header',
+  showTitle: 'Show Title',
   weather_entity: 'Weather Entity',
   defaultCalendar: 'Default Calendar (event creation)',
   defaultView: 'Default View',
@@ -947,7 +951,7 @@ class SkylightCalendarCardEditor extends HTMLElement {
   }
 
   setConfig(config) {
-    this._config = { showHeader: true, ...config };
+    this._config = { showHeader: true, showTitle: true, ...config };
     this._render();
   }
 
