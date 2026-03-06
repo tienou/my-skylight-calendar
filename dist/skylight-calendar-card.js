@@ -170,11 +170,19 @@ class SkylightCalendarCard extends HTMLElement {
     this._innerStylesInjected = false;
   }
 
+  static getConfigElement() {
+    return document.createElement('skylight-calendar-card-editor');
+  }
+
   static getStubConfig() {
     return {
-      calendars: [],
-      defaultView: 'Week',
+      title: 'Family Calendar',
       locale: 'en',
+      defaultView: 'Week',
+      startingDay: 'monday',
+      calendars: [
+        { entity: 'calendar.family', name: 'Family', icon: 'mdi:calendar', color: '#4A90E2' },
+      ],
     };
   }
 
@@ -814,6 +822,385 @@ class SkylightCalendarCard extends HTMLElement {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// GUI EDITOR
+// ═══════════════════════════════════════════════════════════════════════
+
+const EDITOR_BASIC_SCHEMA = [
+  {
+    type: 'grid',
+    schema: [
+      { name: 'title', selector: { text: {} } },
+      {
+        name: 'locale',
+        selector: {
+          select: {
+            mode: 'dropdown',
+            custom_value: true,
+            options: [
+              { value: 'fr', label: 'Fran\u00e7ais' },
+              { value: 'en', label: 'English' },
+              { value: 'de', label: 'Deutsch' },
+              { value: 'es', label: 'Espa\u00f1ol' },
+              { value: 'it', label: 'Italiano' },
+              { value: 'nl', label: 'Nederlands' },
+              { value: 'pt', label: 'Portugu\u00eas' },
+            ],
+          },
+        },
+      },
+    ],
+  },
+  { name: 'weather_entity', selector: { entity: { domain: 'weather' } } },
+  { name: 'defaultCalendar', selector: { entity: { domain: 'calendar' } } },
+  {
+    type: 'grid',
+    schema: [
+      {
+        name: 'defaultView',
+        selector: {
+          select: {
+            mode: 'dropdown',
+            options: [
+              { value: 'Today', label: 'Today' },
+              { value: 'Tomorrow', label: 'Tomorrow' },
+              { value: 'Week', label: 'Week' },
+              { value: 'Biweek', label: 'Biweek' },
+              { value: 'Month', label: 'Month' },
+            ],
+          },
+        },
+      },
+      {
+        name: 'startingDay',
+        selector: {
+          select: {
+            mode: 'dropdown',
+            options: [
+              { value: 'monday', label: 'Monday' },
+              { value: 'tuesday', label: 'Tuesday' },
+              { value: 'wednesday', label: 'Wednesday' },
+              { value: 'thursday', label: 'Thursday' },
+              { value: 'friday', label: 'Friday' },
+              { value: 'saturday', label: 'Saturday' },
+              { value: 'sunday', label: 'Sunday' },
+              { value: 'today', label: 'Today' },
+            ],
+          },
+        },
+      },
+    ],
+  },
+];
+
+const EDITOR_WPC_SCHEMA = [
+  { name: 'showNavigation', selector: { boolean: {} } },
+  { name: 'combineSimilarEvents', selector: { boolean: {} } },
+  { name: 'showLocation', selector: { boolean: {} } },
+  { name: 'hidePastEvents', selector: { boolean: {} } },
+  { name: 'compact', selector: { boolean: {} } },
+];
+
+const EDITOR_LABELS = {
+  title: 'Title',
+  locale: 'Language',
+  weather_entity: 'Weather Entity',
+  defaultCalendar: 'Default Calendar (event creation)',
+  defaultView: 'Default View',
+  startingDay: 'Starting Day',
+  showNavigation: 'Show Navigation Arrows',
+  combineSimilarEvents: 'Combine Similar Events',
+  showLocation: 'Show Event Location',
+  hidePastEvents: 'Hide Past Events',
+  compact: 'Compact Mode',
+};
+
+class SkylightCalendarCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+    this._config = {};
+    this._hass = null;
+  }
+
+  setConfig(config) {
+    this._config = { ...config };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this.shadowRoot?.querySelectorAll('ha-form').forEach(f => {
+      f.hass = hass;
+    });
+  }
+
+  _fireChanged() {
+    this.dispatchEvent(
+      new CustomEvent('config-changed', {
+        detail: { config: { ...this._config } },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  _render() {
+    const root = this.shadowRoot;
+    root.innerHTML = '';
+
+    // ── Styles ──
+    const style = document.createElement('style');
+    style.textContent = `
+      :host { display: block; }
+      .section-title {
+        font-weight: 500; font-size: 1.1em;
+        margin: 20px 0 8px; padding-bottom: 4px;
+        border-bottom: 1px solid var(--divider-color, #e0e0e0);
+        color: var(--primary-text-color);
+      }
+      .section-title:first-of-type { margin-top: 0; }
+      .calendar-item {
+        background: var(--card-background-color, #fff);
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 12px; padding: 12px; margin-bottom: 8px;
+      }
+      .cal-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 8px; min-height: 32px;
+      }
+      .cal-label {
+        display: flex; align-items: center; gap: 8px;
+        font-weight: 500; font-size: 0.95em;
+      }
+      .color-dot {
+        width: 14px; height: 14px; border-radius: 50%;
+        border: 1px solid rgba(0,0,0,0.15); flex-shrink: 0;
+      }
+      .remove-btn {
+        background: none; border: none; cursor: pointer; padding: 4px;
+        color: var(--error-color, #b00020); border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .remove-btn:hover { background: rgba(176,0,32,0.1); }
+      .remove-btn ha-icon { --mdc-icon-size: 20px; }
+      .add-btn {
+        display: flex; align-items: center; justify-content: center;
+        gap: 8px; width: 100%; padding: 12px;
+        background: none; border: 2px dashed var(--divider-color, #e0e0e0);
+        border-radius: 12px; color: var(--primary-color, #03a9f4);
+        cursor: pointer; font-size: 0.95em; margin-top: 4px;
+      }
+      .add-btn:hover {
+        border-color: var(--primary-color, #03a9f4);
+        background: rgba(3,169,244,0.04);
+      }
+      .add-btn ha-icon { --mdc-icon-size: 20px; }
+      .color-row {
+        display: flex; align-items: center; gap: 8px; margin-top: 8px;
+      }
+      .color-row label {
+        font-size: 0.85em; color: var(--secondary-text-color); min-width: 50px;
+      }
+      .color-input {
+        width: 40px; height: 32px; border: none; border-radius: 6px;
+        cursor: pointer; padding: 0; background: none;
+      }
+      .color-hex {
+        flex: 1; padding: 6px 8px; border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 6px; font-family: monospace; font-size: 0.9em;
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color);
+      }
+    `;
+    root.appendChild(style);
+
+    // ── Section: General ──
+    const genTitle = document.createElement('div');
+    genTitle.className = 'section-title';
+    genTitle.textContent = 'General';
+    root.appendChild(genTitle);
+
+    const basicForm = document.createElement('ha-form');
+    basicForm.schema = EDITOR_BASIC_SCHEMA;
+    basicForm.data = this._config;
+    basicForm.hass = this._hass;
+    basicForm.computeLabel = s => EDITOR_LABELS[s.name] || s.name;
+    basicForm.addEventListener('value-changed', ev => {
+      this._config = { ...this._config, ...ev.detail.value };
+      this._fireChanged();
+    });
+    root.appendChild(basicForm);
+
+    // ── Section: Calendars ──
+    const calTitle = document.createElement('div');
+    calTitle.className = 'section-title';
+    calTitle.textContent = 'Calendars';
+    root.appendChild(calTitle);
+
+    const calendars = this._config.calendars || [];
+    calendars.forEach((cal, idx) => {
+      root.appendChild(this._buildCalendarItem(cal, idx));
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-btn';
+    addBtn.innerHTML = '<ha-icon icon="mdi:plus"></ha-icon> Add Calendar';
+    addBtn.addEventListener('click', () => {
+      const cals = [...(this._config.calendars || [])];
+      cals.push({ entity: '', name: '', icon: 'mdi:calendar', color: '#4A90E2' });
+      this._config = { ...this._config, calendars: cals };
+      this._fireChanged();
+      this._render();
+    });
+    root.appendChild(addBtn);
+
+    // ── Section: Display Options ──
+    const dispTitle = document.createElement('div');
+    dispTitle.className = 'section-title';
+    dispTitle.textContent = 'Display Options';
+    root.appendChild(dispTitle);
+
+    const wpc = this._config.weekPlannerConfig || {};
+    const wpcForm = document.createElement('ha-form');
+    wpcForm.schema = EDITOR_WPC_SCHEMA;
+    wpcForm.data = {
+      showNavigation: wpc.showNavigation ?? true,
+      combineSimilarEvents: wpc.combineSimilarEvents ?? true,
+      showLocation: wpc.showLocation ?? true,
+      hidePastEvents: wpc.hidePastEvents ?? false,
+      compact: wpc.compact ?? false,
+    };
+    wpcForm.hass = this._hass;
+    wpcForm.computeLabel = s => EDITOR_LABELS[s.name] || s.name;
+    wpcForm.addEventListener('value-changed', ev => {
+      this._config = {
+        ...this._config,
+        weekPlannerConfig: {
+          ...(this._config.weekPlannerConfig || {}),
+          ...ev.detail.value,
+        },
+      };
+      this._fireChanged();
+    });
+    root.appendChild(wpcForm);
+  }
+
+  _buildCalendarItem(cal, idx) {
+    const item = document.createElement('div');
+    item.className = 'calendar-item';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'cal-header';
+
+    const label = document.createElement('div');
+    label.className = 'cal-label';
+    const dot = document.createElement('span');
+    dot.className = 'color-dot';
+    dot.style.background = cal.color || '#888';
+    label.appendChild(dot);
+    if (cal.icon) {
+      const ico = document.createElement('ha-icon');
+      ico.setAttribute('icon', cal.icon);
+      ico.style.cssText = '--mdc-icon-size:20px';
+      label.appendChild(ico);
+    }
+    const nameText = document.createElement('span');
+    nameText.textContent = cal.name || cal.entity || 'New Calendar';
+    label.appendChild(nameText);
+    header.appendChild(label);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-btn';
+    removeBtn.innerHTML = '<ha-icon icon="mdi:delete-outline"></ha-icon>';
+    removeBtn.addEventListener('click', () => {
+      const cals = [...(this._config.calendars || [])];
+      cals.splice(idx, 1);
+      this._config = { ...this._config, calendars: cals };
+      this._fireChanged();
+      this._render();
+    });
+    header.appendChild(removeBtn);
+    item.appendChild(header);
+
+    // Entity + Name + Icon form
+    const calForm = document.createElement('ha-form');
+    calForm.schema = [
+      { name: 'entity', selector: { entity: { domain: 'calendar' } } },
+      {
+        type: 'grid',
+        schema: [
+          { name: 'name', selector: { text: {} } },
+          { name: 'icon', selector: { icon: {} } },
+        ],
+      },
+    ];
+    calForm.data = cal;
+    calForm.hass = this._hass;
+    calForm.computeLabel = s => {
+      const l = { entity: 'Calendar Entity', name: 'Display Name', icon: 'Icon' };
+      return l[s.name] || s.name;
+    };
+    calForm.addEventListener('value-changed', ev => {
+      const cals = [...(this._config.calendars || [])];
+      cals[idx] = { ...cals[idx], ...ev.detail.value };
+      this._config = { ...this._config, calendars: cals };
+      this._fireChanged();
+    });
+    item.appendChild(calForm);
+
+    // Color picker row
+    const colorRow = document.createElement('div');
+    colorRow.className = 'color-row';
+
+    const colorLabel = document.createElement('label');
+    colorLabel.textContent = 'Color';
+    colorRow.appendChild(colorLabel);
+
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.className = 'color-input';
+    colorInput.value = cal.color || '#4A90E2';
+    colorInput.addEventListener('input', ev => {
+      this._updateCalField(idx, 'color', ev.target.value);
+      // Sync hex text
+      const hex = colorRow.querySelector('.color-hex');
+      if (hex) hex.value = ev.target.value;
+      // Sync header dot
+      const d = item.querySelector('.color-dot');
+      if (d) d.style.background = ev.target.value;
+    });
+    colorRow.appendChild(colorInput);
+
+    const colorHex = document.createElement('input');
+    colorHex.type = 'text';
+    colorHex.className = 'color-hex';
+    colorHex.value = cal.color || '#4A90E2';
+    colorHex.placeholder = '#hex';
+    colorHex.addEventListener('change', ev => {
+      let v = ev.target.value.trim();
+      if (v && !v.startsWith('#')) v = '#' + v;
+      this._updateCalField(idx, 'color', v);
+      colorInput.value = v;
+      const d = item.querySelector('.color-dot');
+      if (d) d.style.background = v;
+    });
+    colorRow.appendChild(colorHex);
+
+    item.appendChild(colorRow);
+    return item;
+  }
+
+  _updateCalField(idx, field, value) {
+    const cals = [...(this._config.calendars || [])];
+    cals[idx] = { ...cals[idx], [field]: value };
+    this._config = { ...this._config, calendars: cals };
+    this._fireChanged();
+  }
+}
+
+customElements.define('skylight-calendar-card-editor', SkylightCalendarCardEditor);
 customElements.define('skylight-calendar-card', SkylightCalendarCard);
 
 window.customCards = window.customCards || [];
@@ -822,10 +1209,11 @@ window.customCards.push({
   name: 'Skylight Calendar Card',
   description: 'A Skylight-inspired family calendar wrapper for week-planner-card',
   preview: false,
+  documentationURL: 'https://github.com/tienou/my-skylight-calendar',
 });
 
 console.info(
-  '%c SKYLIGHT-CALENDAR-CARD %c v1.0.0 ',
+  '%c SKYLIGHT-CALENDAR-CARD %c v1.1.0 ',
   'color: white; background: #4A90E2; font-weight: bold; padding: 2px 6px; border-radius: 4px 0 0 4px;',
   'color: #4A90E2; background: white; font-weight: bold; padding: 2px 6px; border-radius: 0 4px 4px 0; border: 1px solid #4A90E2;'
 );
