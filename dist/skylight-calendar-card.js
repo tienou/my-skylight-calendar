@@ -864,8 +864,6 @@ const EDITOR_BASIC_SCHEMA = [
       },
     ],
   },
-  { name: 'showHeader', selector: { boolean: {} } },
-  { name: 'showTitle', selector: { boolean: {} } },
   { name: 'weather_entity', selector: { entity: { domain: 'weather' } } },
   { name: 'defaultCalendar', selector: { entity: { domain: 'calendar' } } },
   {
@@ -906,6 +904,11 @@ const EDITOR_BASIC_SCHEMA = [
       },
     ],
   },
+];
+
+const EDITOR_SKYLIGHT_DISPLAY_SCHEMA = [
+  { name: 'showHeader', selector: { boolean: {} } },
+  { name: 'showTitle', selector: { boolean: {} } },
 ];
 
 const EDITOR_WPC_SCHEMA = [
@@ -1087,6 +1090,20 @@ class SkylightCalendarCardEditor extends HTMLElement {
     dispTitle.className = 'section-title';
     dispTitle.textContent = 'Display Options';
     root.appendChild(dispTitle);
+
+    const skylightDisplayForm = document.createElement('ha-form');
+    skylightDisplayForm.schema = EDITOR_SKYLIGHT_DISPLAY_SCHEMA;
+    skylightDisplayForm.data = {
+      showHeader: this._config.showHeader ?? true,
+      showTitle: this._config.showTitle ?? true,
+    };
+    skylightDisplayForm.hass = this._hass;
+    skylightDisplayForm.computeLabel = s => EDITOR_LABELS[s.name] || s.name;
+    skylightDisplayForm.addEventListener('value-changed', ev => {
+      this._config = { ...this._config, ...ev.detail.value };
+      this._fireChanged();
+    });
+    root.appendChild(skylightDisplayForm);
 
     const wpc = this._config.weekPlannerConfig || {};
     const wpcForm = document.createElement('ha-form');
