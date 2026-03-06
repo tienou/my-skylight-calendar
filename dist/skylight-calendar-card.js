@@ -905,6 +905,11 @@ const EDITOR_WPC_SCHEMA = [
   { name: 'showLocation', selector: { boolean: {} } },
   { name: 'hidePastEvents', selector: { boolean: {} } },
   { name: 'compact', selector: { boolean: {} } },
+  { name: 'showDayName', selector: { boolean: {} } },
+  { name: 'showDate', selector: { boolean: {} } },
+  { name: 'showTime', selector: { boolean: {} } },
+  { name: 'showCalendarName', selector: { boolean: {} } },
+  { name: 'showCurrentWeather', selector: { boolean: {} } },
 ];
 
 const EDITOR_LABELS = {
@@ -919,6 +924,11 @@ const EDITOR_LABELS = {
   showLocation: 'Show Event Location',
   hidePastEvents: 'Hide Past Events',
   compact: 'Compact Mode',
+  showDayName: 'Show Day Name',
+  showDate: 'Show Date',
+  showTime: 'Show Time',
+  showCalendarName: 'Show Calendar Name',
+  showCurrentWeather: 'Show Current Weather in Header',
 };
 
 class SkylightCalendarCardEditor extends HTMLElement {
@@ -1076,6 +1086,11 @@ class SkylightCalendarCardEditor extends HTMLElement {
       showLocation: wpc.showLocation ?? true,
       hidePastEvents: wpc.hidePastEvents ?? false,
       compact: wpc.compact ?? false,
+      showDayName: wpc.showDayName ?? false,
+      showDate: wpc.showDate ?? false,
+      showTime: wpc.showTime ?? false,
+      showCalendarName: wpc.showCalendarName ?? false,
+      showCurrentWeather: wpc.showCurrentWeather ?? false,
     };
     wpcForm.hass = this._hass;
     wpcForm.computeLabel = s => EDITOR_LABELS[s.name] || s.name;
