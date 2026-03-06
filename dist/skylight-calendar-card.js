@@ -947,7 +947,7 @@ class SkylightCalendarCardEditor extends HTMLElement {
   }
 
   setConfig(config) {
-    this._config = { ...config };
+    this._config = { showHeader: true, ...config };
     this._render();
   }
 
