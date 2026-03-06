@@ -10,6 +10,9 @@
 # ==============================================================================
 
 # 1. HELPERS (The Variables)
+# To add a new calendar: copy a filter entry below and its matching toggle
+# script, then update dashboard.yaml to reference it.
+# To remove a calendar: delete its filter entry and toggle script.
 input_text:
   # Filter Toggles (RegEx: .* = Show, ^$ = Hide)
   calendar1_calendar_filter:
