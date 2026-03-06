@@ -548,7 +548,7 @@ class SkylightCalendarCard extends HTMLElement {
         entity: cal.entity,
         name: cal.name || cal.entity.replace('calendar.', ''),
         color: cal.color,
-        filter: this._calendarVisibility[cal.entity] ? '.*' : '^$',
+        filter: this._calendarVisibility[cal.entity] ? '' : '.*',
       })),
     };
   }
