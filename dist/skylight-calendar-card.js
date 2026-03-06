@@ -482,9 +482,17 @@ class SkylightCalendarCard extends HTMLElement {
         : this._innerCard.querySelector?.('week-planner-card') || this._innerCard;
 
       target.setConfig(config);
+
+      // Force the inner card to re-initialize and refetch data,
+      // because setConfig() alone doesn't trigger _updateEvents()
+      target._initialized = false;
+      target._navigationOffset = 0;
+
       if (this._hass) {
         target.hass = this._hass;
       }
+
+      target.requestUpdate();
     } catch (e) {
       console.error('Skylight Calendar: Error updating inner card', e);
     }
@@ -541,15 +549,16 @@ class SkylightCalendarCard extends HTMLElement {
       type: 'custom:week-planner-card',
       locale: this._config.locale || 'en',
       defaultCalendar: this._config.defaultCalendar,
-      startingDay: viewCfg.startingDay,
-      days: viewCfg.days,
-      showNavigation: true,
       showWeekDayText: false,
       combineSimilarEvents: true,
       noCardBackground: true,
       hidePastEvents: false,
       showLocation: true,
       ...passthrough,
+      // These must come AFTER passthrough so they can't be overridden
+      startingDay: viewCfg.startingDay,
+      days: viewCfg.days,
+      showNavigation: true,
       weather: weatherConfig,
       calendars: this._config.calendars.map(cal => ({
         entity: cal.entity,
